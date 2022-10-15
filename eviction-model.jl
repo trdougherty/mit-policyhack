@@ -32,7 +32,7 @@ end
 census_data = CSV.read("R13210086_SL140.csv", DataFrame, skipto=3, types=Dict(:FIPS => String))
 
 # ╔═╡ c4df97ac-079c-443f-8f93-ce91f24ee68c
-filings_information = dropmissing(leftjoin(evictionsᵧ, census_data, on=:FIPS))
+filings_information = leftjoin(evictionsᵧ, census_data, on=:FIPS)
 
 # ╔═╡ 97dd2be3-8511-4d24-ad8a-c7109158ec39
 tree_class = @load RandomForestRegressor pkg=DecisionTree verbosity=0
@@ -56,7 +56,7 @@ keeping_cols = names(
 				"Total Population:_1"
 			]
 		)
-	), Union{Int, Float64}
+	), Union{Real, Missing}
 );
 
 # ╔═╡ 31aa281e-3650-4bd9-8a55-42464998d40a
@@ -67,33 +67,42 @@ keeping_colsᵦ = filter( x ->
 	keeping_cols
 );
 
-# ╔═╡ 55d646eb-24c1-43b0-988e-f4837117cc61
-Y = filings_information.filings_avg;
+# ╔═╡ 40180fb4-ade0-44a9-81d8-7e20646ccb04
+keeping_cols
 
-# ╔═╡ 4dbc2cc7-3ee0-4ba4-902b-f889185a93c6
+# ╔═╡ a978b7a8-92e6-4976-b1b5-362034026506
 X = select(filings_information, keeping_colsᵦ);
 
+# ╔═╡ 8a41663e-74d3-4d6b-8cd8-bcb01f3ac170
+missing_idx₀ = completecases(X)
+
+# ╔═╡ d0f2e7b2-31cc-412e-86c8-3287a810ef26
+begin
+X′ = X[missing_idx₀, :];
+Y′ = filings_information[missing_idx₀,:].filings_avg;
+end;
+
 # ╔═╡ e5157a23-b98f-4d1a-a339-1c5fb58542df
-tree = machine(tree_model, X, Y)
+tree = machine(tree_model, X′, Y′)
 
 # ╔═╡ 3026c5b7-91b7-43c7-89a2-398abe1842e5
-train, test = partition(eachindex(Y), 0.8, shuffle=true); # 70:30 split
+train, test = partition(eachindex(Y′), 0.8, shuffle=true); # 70:30 split
 
 # ╔═╡ 11cc822a-8873-4586-8bea-e277c0528a1d
 fit!(tree, rows=train)
 
 # ╔═╡ 95d9155f-62ca-463b-a5fd-a36294e8d058
-Ŷ = predict(tree, X[test,:])
+Ŷ = predict(tree, X′[test,:]);
 
 # ╔═╡ b4a55958-fd6f-4db5-aea1-0df005456f44
 # first what would a random guess look like
-null = repeat([mean(Y[train])], length(test));
+null = repeat([mean(Y′[train])], length(test));
 
 # ╔═╡ 6e86b1cc-31a6-4097-8843-f2a8cd8bdde3
-rmse(Y[test], null)
+rmse(Y′[test], null)
 
 # ╔═╡ d9bbce21-8014-4f27-abc9-a2009dbd5d0b
-rmse(Y[test], Ŷ)
+rmse(Y′[test], Ŷ)
 
 # ╔═╡ 29cbbaf6-ec8c-4a4b-8cc3-9d5967fa2443
 
@@ -101,9 +110,6 @@ rmse(Y[test], Ŷ)
 # ╔═╡ beb6bdd4-010f-4c19-9b59-577ce69259bc
 # now to make a prediction for all of the census data
 Xα = select(census_data, keeping_colsᵦ)
-
-# ╔═╡ 501aa046-5079-4735-ba0a-da46bd97d135
-describe(Xα, :nmissing)
 
 # ╔═╡ 05f9779d-2d96-4479-92fc-b52a8817d58e
 missing_idx = completecases(Xα)
@@ -121,7 +127,7 @@ nrow(Xα′)
 
 
 # ╔═╡ e05b40dd-e363-473e-8e08-410be3aa79fe
-Yα = predict(tree, dropmissing(Xα))
+Yα = predict(tree, Xα′)
 
 # ╔═╡ d9a1a60a-afbc-4676-8e7e-b099f20a9f6d
 census_predictiondata = census_data[missing_idx, :];
@@ -146,8 +152,10 @@ CSV.write("census_eviction_track_predictions.csv", censusⱼ)
 # ╠═d461b21c-e6a6-450a-a10a-d7e22c3e5fea
 # ╠═4718e5a5-bdec-41b3-a2e5-a29dbd481c33
 # ╠═31aa281e-3650-4bd9-8a55-42464998d40a
-# ╠═55d646eb-24c1-43b0-988e-f4837117cc61
-# ╠═4dbc2cc7-3ee0-4ba4-902b-f889185a93c6
+# ╠═40180fb4-ade0-44a9-81d8-7e20646ccb04
+# ╠═a978b7a8-92e6-4976-b1b5-362034026506
+# ╠═8a41663e-74d3-4d6b-8cd8-bcb01f3ac170
+# ╠═d0f2e7b2-31cc-412e-86c8-3287a810ef26
 # ╠═e5157a23-b98f-4d1a-a339-1c5fb58542df
 # ╠═3026c5b7-91b7-43c7-89a2-398abe1842e5
 # ╠═11cc822a-8873-4586-8bea-e277c0528a1d
@@ -157,7 +165,6 @@ CSV.write("census_eviction_track_predictions.csv", censusⱼ)
 # ╠═d9bbce21-8014-4f27-abc9-a2009dbd5d0b
 # ╠═29cbbaf6-ec8c-4a4b-8cc3-9d5967fa2443
 # ╠═beb6bdd4-010f-4c19-9b59-577ce69259bc
-# ╠═501aa046-5079-4735-ba0a-da46bd97d135
 # ╠═05f9779d-2d96-4479-92fc-b52a8817d58e
 # ╠═04fbedfe-c4f9-4897-bf52-12f9ba8f9bad
 # ╠═4bded0c7-d9ec-47c8-b272-26bf6c290130
